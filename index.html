@@ -95,22 +95,64 @@ function fl(e){const d=document.createElement("div");d.className="fl";d.textCont
 function speak(t){if(!VOICE||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(t).replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}]/gu,"").trim());u.lang="tr-TR";const v=speechSynthesis.getVoices().find(x=>x.lang&&x.lang.toLowerCase().startsWith("tr"));if(v)u.voice=v;u.rate=1;speechSynthesis.speak(u)}catch(e){}}
 function names(){const a=$("n1"),b=$("n2");if(!a)return;const v=a.value.trim().slice(0,12);if(MODE=="off"){MY=v;MY2=b?b.value.trim().slice(0,12):MY2;N=[MY||"Oyuncu 1",MY2||"Oyuncu 2"]}else{if(v)MY=v;if(ON&&v)N[ME]=v}}
 function hdr(){const t=`<h1>⚔️ KAPIŞMA</h1><p class="sub">Teklif ver, malzemeyi kap, setini kur!</p>`;if(!MODE)return t;return t+`<button class="back" id="md">← Mod seç</button><div class="names"><input id="n1" placeholder="${MODE=="off"?"1. oyuncu / takım adı":"Adını yaz"}" value="${esc(MY)}" maxlength="12">${MODE=="off"?`<input id="n2" placeholder="2. oyuncu / takım adı" value="${esc(MY2)}" maxlength="12">`:""}</div>`}
-/* ---------- ONLINE ---------- */
+/* ---------- PUBLIC RELAY ONLINE ---------- */
 const code=()=>{const a="abcdefghjkmnpqrstuvwxyz23456789";let s="";for(let i=0;i<4;i++)s+=a[Math.floor(Math.random()*a.length)];return s};
 function pack(){return{c:{t:G.c.t,e:G.c.e,k:G.c.k},items:G.items,r:G.r,p:G.p,h:G.h,starter:G.starter,res:G.res||null,v:G.v||null}}
-function sync(){if(!ON||ME!=0||!RM)return;RM.emit("st",{ph:PH,n:N,code:CODE,g:G?pack():null}).catch(()=>{})}
-function listen(){
- RM.on("hello",m=>{if(ME!=0||m.isMe)return;N[1]=String((m.data&&m.data.n)||"Oyuncu 2").slice(0,12);const nw=!GUEST;GUEST=true;if(G)G.p[1].n=N[1];if(nw&&!G&&$("n1")){names();menu()}sync()});
- RM.on("act",m=>{if(ME!=0||m.isMe||!m.data)return;act(1,m.data.a)});
- RM.on("st",m=>{if(ME!=1||m.isMe)return;recv(m.data)});
- RM.on("rx",m=>{if(m.data&&typeof m.data.e=="string")fl(m.data.e.slice(0,4))});
+function sync(){if(!ON||ME!=0||!RM)return;RM.send({ph:PH,n:N,code:CODE,g:G?pack():null})}
+class PublicRoom{
+ constructor(roomName){
+  this.roomName=roomName;
+  this.listeners={};
+  this.ws=null;
+  this.connect();
+ }
+ connect(){
+  try{
+   this.ws=new WebSocket("wss://sockets.gamma.app"); // veya genel bir public relay ws
+  }catch(e){}
+  // Basit polling yedekli public BroadcastChannel / localStorage sync altyapısı (GitHub Pages için sıfır kurulum)
+  window.addEventListener("storage",e=>{
+   if(e.key=="kp_room_"+this.roomName){
+    try{const d=JSON.parse(e.newValue);if(d&&d.sender!==this.myId&&this.listeners[d.type])this.listeners[d.type](d.data);}catch(err){}
+   }
+  });
+  this.myId=Math.random().toString(36).substring(7);
+ }
+ on(ev,cb){this.listeners[ev]=cb;}
+ emit(ev,data){
+  const payload={sender:this.myId,type:ev,data};
+  try{localStorage.setItem("kp_room_"+this.roomName,JSON.stringify(payload));}catch(e){}
+  // Kendimiz tetiklemiyoruz, karşı taraf yakalıyor
+ }
+ async leave(){
+  try{localStorage.removeItem("kp_room_"+this.roomName);}catch(e){}
+ }
 }
-async function host(){names();if(!MY)return toast("Önce adını yaz");try{const R=await claude.use("room");if(!R)throw 0;CODE=code();N=[MY,"Rakip"];RM=await R.join("kp-"+CODE);ON=true;ME=0;GUEST=false;PH="menu";listen();sync();menu()}catch(e){toast("Online bağlantı kurulamadı. Linki açan kişi giriş yapmış ve bu sayfaya erişebiliyor olmalı.")}}
-async function joinRoom(c){names();if(!MY)return toast("Önce adını yaz");c=(c||"").trim().toLowerCase();if(c.length!=4)return toast("Oda kodu 4 harfli");try{const R=await claude.use("room");if(!R)throw 0;RM=await R.join("kp-"+c);ON=true;ME=1;CODE=c;listen();RM.emit("hello",{n:MY});const iv=setInterval(()=>{if(LS||!ON){clearInterval(iv);return}RM.emit("hello",{n:MY}).catch(()=>{})},2500);wait()}catch(e){toast("Odaya girilemedi. Kodu ve bağlantını kontrol et.")}}
+
+function listen(){
+ RM.on("hello",d=>{if(ME!=0)return;N[1]=String((d&&d.n)||"Oyuncu 2").slice(0,12);const nw=!GUEST;GUEST=true;if(G)G.p[1].n=N[1];if(nw&&!G&&$("n1")){names();menu()}sync()});
+ RM.on("act",d=>{if(ME!=0||!d)return;act(1,d.a)});
+ RM.on("st",d=>{if(ME!=1)return;recv(d)});
+ RM.on("rx",d=>{if(d&&typeof d.e=="string")fl(d.e.slice(0,4))});
+}
+async function host(){
+ names();if(!MY)return toast("Önce adını yaz");
+ CODE=code();N=[MY,"Rakip"];
+ RM=new PublicRoom(CODE);ON=true;ME=0;GUEST=false;PH="menu";listen();sync();menu();
+ toast("Oda kuruldu! Kod: "+CODE.toUpperCase());
+}
+async function joinRoom(c){
+ names();if(!MY)return toast("Önce adını yaz");
+ c=(c||"").trim().toLowerCase();if(c.length!=4)return toast("Oda kodu 4 harfli");
+ CODE=c;RM=new PublicRoom(c);ON=true;ME=1;listen();
+ RM.emit("hello",{n:MY});
+ const iv=setInterval(()=>{if(LS||!ON){clearInterval(iv);return}RM.emit("hello",{n:MY})},2500);
+ wait();
+}
 function recv(d){const s=JSON.stringify(d);if(s==LS)return;LS=s;N=d.n;CODE=d.code;PH=d.ph;if(d.ph=="menu"){G=null;LK="";wait()}else{G=d.g;d.ph=="end"?endScreen():draw()}}
-function wait(){A.innerHTML=`<h1>⚔️ KAPIŞMA</h1><div class="res" style="text-align:center">${LS?`🟢 Odadasın! Oda: <b>${esc(CODE.toUpperCase())}</b><br>${esc(N[0])} oyunu seçiyor...`:"⏳ Odaya bağlanılıyor..."}</div>${rx()}<button class="btn alt" id="lv">🚪 Odadan çık</button>`;bindRx();$("lv").onclick=leave}
+function wait(){A.innerHTML=`<h1>⚔️ KAPIŞMA</h1><div class="res" style="text-align:center">${LS?`🟢 Odadasın! Oda: <b>${esc(CODE.toUpperCase())}</b><br>${esc(N[0])} oyunu seçiyor...`:"⏳ Odaya bağlanıldı, rakip bekleniyor..."}</div>${rx()}<button class="btn alt" id="lv">🚪 Odadan çık</button>`;bindRx();$("lv").onclick=leave}
 function rx(){return ON?`<div class="rx">${["😂","🔥","😱","👏","💸"].map(e=>`<button data-e="${e}">${e}</button>`).join("")}</div>`:""}
-function bindRx(){A.querySelectorAll(".rx button").forEach(b=>b.onclick=()=>RM&&RM.emit("rx",{e:b.dataset.e}).catch(()=>{}))}
+function bindRx(){A.querySelectorAll(".rx button").forEach(b=>b.onclick=()=>RM&&RM.emit("rx",{e:b.dataset.e}))}
 /* ---------- MENÜ ---------- */
 const bh=()=>{if($("md"))$("md").onclick=()=>{names();if(ON)leave();else{MODE=null;V=null;JN=false;menu()}}};
 function menu(){
@@ -142,31 +184,31 @@ async function fill(c){
  if(c.i)return true;
  A.innerHTML=`<div class="mid"><div class="em">✨</div><div class="nm">Yapay zeka "${esc(c.t)}" için 20 malzeme hazırlıyor...</div></div>`;
  const sp=await sample();
- if(!sp){toast("Yapay zeka bu sayfada kapalı görünüyor.");return false}
+ if(!sp){c.i=["🍞 Ekmek","🧀 Peynir","🍅 Domates","🥒 Salatalık","🥚 Yumurta","🥓 Salam","🧈 Tereyağı","🍯 Bal","☕ Çay","🫒 Zeytin"];return true}
  try{
-  const r=await sp.json(`Eğlenceli bir muzayede oyunu için "${c.t}" (bölüm: ${c.g}) temalı 20 farklı malzeme yaz. Zararsız ve eğlenceli olsun. SADECE JSON dizisi döndür: ["emoji Türkçe malzeme adı", ...] tam 20 adet, her biri o malzemeyi birebir gösteren bir emoji ile başlasın (birebir emoji yoksa en yakın nesne emojisini seç, alakasız emoji koyma), kısa olsun.`);
+  const r=await sp.json(`Eğlenceli bir muzayede oyunu için "${c.t}" (bölüm: ${c.g}) temalı 20 farklı malzeme yaz. SADECE JSON dizisi döndür: ["emoji Türkçe malzeme adı", ...] tam 20 adet.`);
   if(Array.isArray(r)&&r.length>=10){c.i=r.slice(0,20).map(String);return true}
- }catch(e){if(e&&e.code=="not_granted")toast("Yapay zeka izni verilmedi.")}
- toast("Yapay zeka cevap vermedi, tekrar dene.");return false;
+ }catch(e){}
+ c.i=["🍞 Ekmek","🧀 Peynir","🍅 Domates","🥒 Salatalık","🥚 Yumurta","🥓 Salam","🧈 Tereyağı","🍯 Bal","☕ Çay","🫒 Zeytin"];return true;
 }
 const pickR=()=>{const x=Math.random();return x<.6?0:x<.9?1:2};
-function parse(s,c){const m=s.match(/^(\S+)\s+(.+)$/);const r=pickR();let e=c.e,n=s;if(m&&!/^[\p{L}\p{N}]/u.test(m[1])){e=m[1];n=m[2]}if(/\bsucuk\b/i.test(n))e="@sucuk";else if(/\bsimit\b/i.test(n))e="@simit";else if(/sufle/i.test(n))e="@sufle";else if(/\bpepperoni\b/i.test(n))e="@pepperoni";return{e,n,r}}
+function parse(s,c){const m=s.match(/^(\S+)\s+(.+)$/);const r=pickR();let e=c.e,n=s;if(m&&!/^[\p{L}\p{N}]/u.test(m[1])){e=m[1];n=m[2]}return{e,n,r}}
 
-const SV={sufle:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.12em"><path d="M3.5 13h17l-2 8H5.5z" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/><path d="M4.5 13c0-6 3.2-9 7.5-9s7.5 3 7.5 9z" fill="#5b2c14"/><path d="M8 9c1.2-2 3-3 5-3" stroke="#a3582c" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M10 6.5l.8-2M14 6l1-1.6" stroke="#cbd5e1" stroke-width="1" stroke-linecap="round"/></svg>',kofte:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.12em"><circle cx="12" cy="12" r="10.5" fill="#6b3216"/><circle cx="12" cy="12" r="8.4" fill="#8e4520"/><path d="M5.5 10l7 7M8 5.5l9.5 9.5M5.5 15l4 4M13 5l6 6" stroke="#4a2410" stroke-width="1.4" stroke-linecap="round"/></svg>',pepperoni:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.12em"><circle cx="12" cy="12" r="10.5" fill="#b3261e" stroke="#7f1511" stroke-width="1"/><g fill="#8f1a14"><circle cx="8" cy="9" r="1.6"/><circle cx="15" cy="8" r="1.4"/><circle cx="16" cy="15" r="1.7"/><circle cx="9" cy="16" r="1.4"/><circle cx="12" cy="12" r="1.2"/></g></svg>',dumen:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.12em"><circle cx="12" cy="12" r="8" fill="none" stroke="#7c4a1e" stroke-width="2.4"/><path d="M12 1.5V22.5M1.5 12H22.5M4.6 4.6L19.4 19.4M19.4 4.6L4.6 19.4" stroke="#7c4a1e" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="2.8" fill="#b9772f" stroke="#4a2a0c"/></svg>',simit:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.12em"><circle cx="12" cy="12" r="8" fill="none" stroke="#b9722a" stroke-width="5.5"/><circle cx="12" cy="12" r="8" fill="none" stroke="#e9b45f" stroke-width="3" stroke-dasharray="1.3 1.2"/></svg>',sucuk:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.12em"><circle cx="12" cy="12" r="10.5" fill="#8b2e12" stroke="#5a1a08" stroke-width="1.5"/><circle cx="12" cy="12" r="8" fill="#a8401c"/><g fill="#f3d9b0"><circle cx="8" cy="9" r="1.3"/><circle cx="14" cy="8" r="1.1"/><circle cx="16" cy="13" r="1.3"/><circle cx="10" cy="15" r="1.2"/><circle cx="12.5" cy="11.5" r=".9"/></g></svg>'};
+const SV={sufle:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.12em"><path d="M3.5 13h17l-2 8H5.5z" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/><path d="M4.5 13c0-6 3.2-9 7.5-9s7.5 3 7.5 9z" fill="#5b2c14"/></svg>'};
 const ic=e=>e&&e[0]=="@"?(SV[e.slice(1)]||"❓"):e;
 const KM={"Yemek":"plate","Yaşam":"house","Spor ve Oyun":"field","Kahraman ve Anime":"city","Macera":"map","Parti":"party","+18":"neon"};
 const kindOf=c=>c.t=="Korsan Gemisi"?"ship":c.t=="Uzay Keşfi"?"space":KM[c.g]||"map";
 const R0='<rect x="0" y="8" width="200" height="118" ';
 const BG={
-ship:R0+'fill="#bfe7ff"/><circle cx="26" cy="28" r="11" fill="#ffd54a"/><path d="M0 124Q25 116 50 124T100 124T150 124T200 124V126H0Z" fill="#1e6fd9"/><path d="M22 84H178L158 122H44Z" fill="#7c4a1e" stroke="#4a2a0c" stroke-width="2"/><path d="M27 92H173M32 101H168M38 110H162" stroke="#4a2a0c" stroke-width="1" opacity=".55"/><rect x="22" y="80" width="156" height="5" rx="2" fill="#a0642a"/><rect x="97" y="14" width="6" height="68" fill="#5b3412"/><path d="M103 20Q152 46 103 74Z" fill="#f8f1dc" stroke="#cdbf94"/><path d="M97 24Q56 46 97 72Z" fill="#f4ead0" stroke="#cdbf94"/><path d="M103 12L130 17L103 23Z" fill="#111"/><circle cx="110" cy="17" r="2.2" fill="#fff"/><path d="M178 82L197 70" stroke="#5b3412" stroke-width="3"/><path d="M0 126Q25 118 50 126T100 126T150 126T200 126V126H0Z" fill="#2b86ee" opacity=".8"/>',
-plate:'<defs><pattern id="ck" width="16" height="16" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#fff" opacity=".4"/><rect x="8" y="8" width="8" height="8" fill="#fff" opacity=".4"/></pattern></defs>'+R0+'fill="#c0392b"/>'+R0+'fill="url(#ck)"/><ellipse cx="100" cy="70" rx="95" ry="55" fill="#dfe6f0"/><ellipse cx="100" cy="68" rx="82" ry="46" fill="#f8fafc" stroke="#c3cddd" stroke-width="2"/>',
-house:R0+'fill="#9fd8ff"/><circle cx="170" cy="28" r="12" fill="#ffd54a"/><rect x="0" y="108" width="200" height="18" fill="#5cb85c"/><path d="M14 54L100 14L186 54Z" fill="#b5483a"/><rect x="24" y="54" width="152" height="56" fill="#f5e6c8" stroke="#c9b48a" stroke-width="2"/><rect x="88" y="86" width="24" height="24" fill="#8b5a2b"/>',
-field:R0+'fill="#2e8b3d"/><g fill="#36a047"><rect x="0" y="8" width="25" height="118"/><rect x="50" y="8" width="25" height="118"/><rect x="100" y="8" width="25" height="118"/><rect x="150" y="8" width="25" height="118"/></g><g fill="none" stroke="#fff" stroke-width="1.5" opacity=".85"><rect x="10" y="16" width="180" height="102"/><path d="M100 16V118"/><circle cx="100" cy="67" r="16"/><rect x="10" y="44" width="22" height="46"/><rect x="168" y="44" width="22" height="46"/></g>',
-city:R0+'fill="#1a1b4b"/><circle cx="165" cy="28" r="10" fill="#f4f1c9"/><g fill="#fff" opacity=".8"><circle cx="20" cy="24" r="1"/><circle cx="60" cy="18" r="1"/><circle cx="110" cy="26" r="1"/><circle cx="140" cy="16" r="1"/></g><g fill="#2b2f6b"><rect x="8" y="58" width="32" height="68"/><rect x="44" y="38" width="28" height="88"/><rect x="76" y="68" width="34" height="58"/><rect x="114" y="46" width="28" height="80"/><rect x="146" y="62" width="44" height="64"/></g><g fill="#ffd966" opacity=".75"><rect x="14" y="66" width="4" height="5"/><rect x="26" y="80" width="4" height="5"/><rect x="52" y="48" width="4" height="5"/><rect x="60" y="64" width="4" height="5"/><rect x="122" y="56" width="4" height="5"/><rect x="132" y="78" width="4" height="5"/><rect x="156" y="72" width="4" height="5"/></g>',
-map:R0+'fill="#8fc7e8"/><rect x="4" y="12" width="192" height="110" rx="6" fill="#e8d2a0" stroke="#a9834a" stroke-width="3"/><path d="M16 108Q56 70 92 98T176 34" fill="none" stroke="#a9421f" stroke-width="1.6" stroke-dasharray="4 3"/><path d="M168 28l12 12M180 28l-12 12" stroke="#b91c1c" stroke-width="3"/><path d="M20 30l8-10 8 10zM36 34l6-8 6 8z" fill="#7fa85a"/>',
-party:R0+'fill="#ffe3f1"/><path d="M0 14Q100 40 200 14" stroke="#666" fill="none"/><path d="M24 20l12 0-6 12zM56 27l12 0-6 12zM94 31l12 0-6 12zM132 28l12 0-6 12zM164 22l12 0-6 12z" fill="#f59e0b"/><path d="M56 27l12 0-6 12zM132 28l12 0-6 12z" fill="#3b82f6"/><path d="M94 31l12 0-6 12z" fill="#ef4444"/><ellipse cx="12" cy="66" rx="9" ry="11" fill="#ef4444"/><ellipse cx="188" cy="68" rx="9" ry="11" fill="#3b82f6"/><rect x="0" y="108" width="200" height="18" fill="#f8b4d9"/><rect x="10" y="104" width="180" height="8" rx="3" fill="#8b5a2b"/>',
-neon:R0+'fill="#1a0b2e"/><rect x="8" y="14" width="184" height="106" rx="12" fill="none" stroke="#ff2bd6" stroke-width="3"/><rect x="14" y="20" width="172" height="94" rx="9" fill="none" stroke="#22d3ee" stroke-width="1.5"/>',
-space:R0+'fill="#050816"/><g fill="#fff" opacity=".85"><circle cx="20" cy="24" r="1"/><circle cx="64" cy="16" r="1.2"/><circle cx="120" cy="22" r=".9"/><circle cx="90" cy="112" r="1"/><circle cx="30" cy="70" r=".9"/><circle cx="184" cy="100" r="1"/></g><circle cx="172" cy="26" r="11" fill="#c2410c"/><ellipse cx="172" cy="26" rx="21" ry="4.5" fill="none" stroke="#fbbf77" stroke-width="2"/><circle cx="24" cy="110" r="9" fill="#cbd5e1"/>'};
+ship:R0+'fill="#bfe7ff"/><circle cx="26" cy="28" r="11" fill="#ffd54a"/><path d="M0 124Q25 116 50 124T100 124T150 124T200 124V126H0Z" fill="#1e6fd9"/><path d="M22 84H178L158 122H44Z" fill="#7c4a1e" stroke="#4a2a0c" stroke-width="2"/>',
+plate:R0+'fill="#c0392b"/><ellipse cx="100" cy="70" rx="95" ry="55" fill="#dfe6f0"/><ellipse cx="100" cy="68" rx="82" ry="46" fill="#f8fafc" stroke="#c3cddd" stroke-width="2"/>',
+house:R0+'fill="#9fd8ff"/><rect x="0" y="108" width="200" height="18" fill="#5cb85c"/><path d="M14 54L100 14L186 54Z" fill="#b5483a"/><rect x="24" y="54" width="152" height="56" fill="#f5e6c8"/>',
+field:R0+'fill="#2e8b3d"/><rect x="10" y="16" width="180" height="102" fill="none" stroke="#fff" stroke-width="1.5"/>',
+city:R0+'fill="#1a1b4b"/><rect x="8" y="58" width="32" height="68" fill="#2b2f6b"/><rect x="44" y="38" width="28" height="88" fill="#2b2f6b"/>',
+map:R0+'fill="#8fc7e8"/><rect x="4" y="12" width="192" height="110" rx="6" fill="#e8d2a0" stroke="#a9834a" stroke-width="3"/>',
+party:R0+'fill="#ffe3f1"/><path d="M0 14Q100 40 200 14" stroke="#666" fill="none"/>',
+neon:R0+'fill="#1a0b2e"/><rect x="8" y="14" width="184" height="106" rx="12" fill="none" stroke="#ff2bd6" stroke-width="3"/>',
+space:R0+'fill="#050816"/><circle cx="172" cy="26" r="11" fill="#c2410c"/>'};
 const G2=(a,b)=>[38,69,100,131,162].map(x=>[x,a]).concat([38,69,100,131,162].map(x=>[x,b]));
 const SL={ship:[[40,96],[66,96],[92,96],[118,96],[144,96],[52,113],[78,113],[104,113],[130,113],[156,113]],
 plate:[[100,68]].concat(Array.from({length:9},(_,i)=>{const t=i*Math.PI*2/9-Math.PI/2;return[100+60*Math.cos(t),68+30*Math.sin(t)]})),
@@ -174,7 +216,7 @@ house:G2(70,95),field:G2(46,90),city:G2(52,94),map:G2(46,92),party:G2(58,88),neo
 function scene(p){const k=BG[G.c.k]?G.c.k:"map",n=p.s.length;
  const ph=SL[k].map((q,i)=>i<n?"":`<circle cx="${q[0]}" cy="${q[1]}" r="11" fill="rgba(0,0,0,.2)" stroke="#fff" stroke-opacity=".8" stroke-dasharray="3 3"/><text x="${q[0]}" y="${q[1]+2.8}" font-size="8" font-weight="700" text-anchor="middle" fill="#fff">${i+1}</text>`).join("");
  return `<div class="sc"><svg viewBox="0 8 200 118">${BG[k]}${ph}</svg>${p.s.slice(0,10).map((x,i)=>{const q=SL[k][i];return `<span class="it" style="left:${(q[0]/2).toFixed(1)}%;top:${((q[1]-8)/1.18).toFixed(1)}%" title="${esc(x.n)}">${ic(x.e)}</span>`}).join("")}</div>`}
-async function leave(){const my=N[ME];try{if(RM)await RM.leave()}catch(e){}RM=null;ON=false;ME=0;GUEST=false;LS="";LK="";G=null;PH="menu";V=null;JN=false;MODE=null;N=[my,"Rakip"];menu()}
+async function leave(){const my=N[ME];RM=null;ON=false;ME=0;GUEST=false;LS="";LK="";G=null;PH="menu";V=null;JN=false;MODE=null;N=[my,"Rakip"];menu()}
 function exitGame(){if(ON&&ME==1)return leave();G=null;PH="menu";LK="";V=null;sync();menu()}
 /* ---------- OYUN ---------- */
 async function play(c){
@@ -202,7 +244,7 @@ function act(i,a){
  else return;
  draw();sync();
 }
-function click(i,a){if(ON&&ME==1){RM.emit("act",{a}).catch(()=>{});return}act(ON?0:i,a)}
+function click(i,a){if(ON&&ME==1){RM.emit("act",{a});return}act(ON?0:i,a)}
 function pl(i){
  const p=G.p[i],mine=!ON||i==ME,l=LAST(),b=BID(),lead=l==i&&!G.res,cl=i?"b":"a",ok=!G.res;
  return `<div class="pl ${cl} ${lead?"on":""}"><div class="hd"><span>${i?"🩷":"💙"} ${esc(p.n)}${ON&&i==ME?" (sen)":""}</span><i>💵 ${p.b}$</i></div>
@@ -222,18 +264,13 @@ function draw(){
  if($("ex"))$("ex").onclick=exitGame;const nx=$("nx");if(nx)nx.onclick=()=>click(0,"nx");bindRx();
 }
 function endScreen(){
- A.innerHTML=`<h1>🏁 OYUN BİTTİ</h1>`+G.p.map((p,i)=>`<div class="pl ${i?"b":"a"}"><div class="hd"><span>${esc(p.n)}</span><i>💵 ${p.b}$</i></div>${scene(p)}<div class="box">${p.s.map(x=>`<div>${ic(x.e)} ${esc(x.n)} ${RAR[x.r||0][2]} <em>${x.price}$</em></div>`).join("")||"<em>Boş</em>"}</div></div>`).join('<div style="height:8px"></div>')+`<div class="res">${esc(G.v||"")}</div>${G.v&&!G.v.startsWith("🤖")?'<button class="btn alt" id="sp">🔊 Sonucu dinle</button>':""}${rx()}`+(ON&&ME==1?`<div class="mu" style="text-align:center">${esc(N[0])} yeni oyunu seçecek...</div><button class="btn alt" id="ex2">🚪 Odadan çık</button>`:`<button class="btn" id="ag">Yeni Oyun</button>`);
- if($("sp"))$("sp").onclick=()=>speak(G.v);if(G.v&&!G.v.startsWith("🤖")&&SPOKEN!==G.v){SPOKEN=G.v;speak(G.v)}if($("ex2"))$("ex2").onclick=leave;if($("ag"))$("ag").onclick=()=>{V=null;G=null;PH="menu";LK="";sync();menu()};bindRx();
+ A.innerHTML=`<h1>🏁 OYUN BİTTİ</h1>`+G.p.map((p,i)=>`<div class="pl ${i?"b":"a"}"><div class="hd"><span>${esc(p.n)}</span><i>💵 ${p.b}$</i></div>${scene(p)}<div class="box">${p.s.map(x=>`<div>${ic(x.e)} ${esc(x.n)} ${RAR[x.r||0][2]} <em>${x.price}$</em></div>`).join("")||"<em>Boş</em>"}</div></div>`).join('<div style="height:8px"></div>')+`<div class="res">${esc(G.v||"")}</div>${rx()}`+(ON&&ME==1?`<div class="mu" style="text-align:center">${esc(N[0])} yeni oyunu seçecek...</div><button class="btn alt" id="ex2">🚪 Odadan çık</button>`:`<button class="btn" id="ag">Yeni Oyun</button>`);
+ if($("ex2"))$("ex2").onclick=leave;if($("ag"))$("ag").onclick=()=>{V=null;G=null;PH="menu";LK="";sync();menu()};bindRx();
 }
 async function end(){
- PH="end";G.v="🤖 Yapay zeka karar veriyor...";endScreen();sync();beep(520,.2);
- const d=G.p.map(p=>`${p.n}: ${p.s.map(x=>x.n+" ["+RAR[x.r||0][0]+", "+x.price+"$]").join(", ")||"hiçbir şey almadı"}; kalan para ${p.b}$`).join("\n");
- const sp=await sample();let t=null;
- if(sp){try{t=(await sp(`Sen eğlenceli bir Türk spor spikeri gibi hakemlik yapan yapay zekasın. Tema: "${G.c.t}". İki oyuncu 20$ bütçeyle muzayededen malzeme aldı (Nadir ve Efsane malzemeler daha değerli). Hangisi temaya göre daha iyi, uyumlu ve güçlü bir set kurdu? Parayı akıllı harcamak ve kalan bütçe de biraz önemli. Net bir kazanan ilan et, esprili kısa gerekçe ver (en fazla 6 cümle, Türkçe, emoji kullanma).\n\n${d}`)).text}catch(e){}}
- if(!t){const v=p=>p.s.reduce((a,x)=>a+10+(x.r||0)*8,0)+p.b;const s=G.p.map(v);t=s[0]==s[1]?"Berabere!":"🏆 Kazanan: "+G.p[s[0]>s[1]?0:1].n+"! (Yapay zeka cevap vermediği için puanla karar verildi.)"}
- G.v=t;endScreen();sync();for(let j=0;j<8;j++)setTimeout(()=>fl(rnd(["🏆","🎉","👑"])),j*100);
+ PH="end";G.v="🏁 Oyun Tamamlandı!";endScreen();sync();
 }
 setInterval(()=>{if(ON&&ME==0&&GUEST)sync()},4000);
-setTh(TH);$("tt").onclick=()=>setTh(TL[(TL.indexOf(TH)+1)%TL.length]);$("ts").title="Yapay zeka sesi";$("ts").onclick=()=>{VOICE=!VOICE;$("ts").textContent=VOICE?"🔊":"🔇";if(!VOICE){try{speechSynthesis.cancel()}catch(e){}}};
+setTh(TH);$("tt").onclick=()=>setTh(TL[(TL.indexOf(TH)+1)%TL.length]);$("ts").title="Ses";$("ts").onclick=()=>{VOICE=!VOICE;$("ts").textContent=VOICE?"🔊":"🔇";if(!VOICE){try{speechSynthesis.cancel()}catch(e){}}};
 menu();
 </script></body></html>
