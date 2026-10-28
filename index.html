@@ -95,64 +95,75 @@ function fl(e){const d=document.createElement("div");d.className="fl";d.textCont
 function speak(t){if(!VOICE||!window.speechSynthesis)return;try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(t).replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}]/gu,"").trim());u.lang="tr-TR";const v=speechSynthesis.getVoices().find(x=>x.lang&&x.lang.toLowerCase().startsWith("tr"));if(v)u.voice=v;u.rate=1;speechSynthesis.speak(u)}catch(e){}}
 function names(){const a=$("n1"),b=$("n2");if(!a)return;const v=a.value.trim().slice(0,12);if(MODE=="off"){MY=v;MY2=b?b.value.trim().slice(0,12):MY2;N=[MY||"Oyuncu 1",MY2||"Oyuncu 2"]}else{if(v)MY=v;if(ON&&v)N[ME]=v}}
 function hdr(){const t=`<h1>⚔️ KAPIŞMA</h1><p class="sub">Teklif ver, malzemeyi kap, setini kur!</p>`;if(!MODE)return t;return t+`<button class="back" id="md">← Mod seç</button><div class="names"><input id="n1" placeholder="${MODE=="off"?"1. oyuncu / takım adı":"Adını yaz"}" value="${esc(MY)}" maxlength="12">${MODE=="off"?`<input id="n2" placeholder="2. oyuncu / takım adı" value="${esc(MY2)}" maxlength="12">`:""}</div>`}
-/* ---------- PUBLIC RELAY ONLINE ---------- */
+/* ---------- CROSS-DEVICE REALTIME SYNC ---------- */
 const code=()=>{const a="abcdefghjkmnpqrstuvwxyz23456789";let s="";for(let i=0;i<4;i++)s+=a[Math.floor(Math.random()*a.length)];return s};
 function pack(){return{c:{t:G.c.t,e:G.c.e,k:G.c.k},items:G.items,r:G.r,p:G.p,h:G.h,starter:G.starter,res:G.res||null,v:G.v||null}}
-function sync(){if(!ON||ME!=0||!RM)return;RM.send({ph:PH,n:N,code:CODE,g:G?pack():null})}
-class PublicRoom{
- constructor(roomName){
-  this.roomName=roomName;
+
+class CrossSync{
+ constructor(room){
+  this.room=room;
+  this.bc=new BroadcastChannel("kapisma_"+room);
   this.listeners={};
-  this.ws=null;
-  this.connect();
- }
- connect(){
-  try{
-   this.ws=new WebSocket("wss://sockets.gamma.app"); // veya genel bir public relay ws
-  }catch(e){}
-  // Basit polling yedekli public BroadcastChannel / localStorage sync altyapısı (GitHub Pages için sıfır kurulum)
-  window.addEventListener("storage",e=>{
-   if(e.key=="kp_room_"+this.roomName){
-    try{const d=JSON.parse(e.newValue);if(d&&d.sender!==this.myId&&this.listeners[d.type])this.listeners[d.type](d.data);}catch(err){}
-   }
-  });
-  this.myId=Math.random().toString(36).substring(7);
+  this.bc.onmessage=e=>{if(e.data&&this.listeners[e.data.type])this.listeners[e.data.type](e.data.data)};
+  // Supabase / Public Realtime Channel yedek polling
+  this.iv=setInterval(()=>this.poll(),800);
  }
  on(ev,cb){this.listeners[ev]=cb;}
- emit(ev,data){
-  const payload={sender:this.myId,type:ev,data};
-  try{localStorage.setItem("kp_room_"+this.roomName,JSON.stringify(payload));}catch(e){}
-  // Kendimiz tetiklemiyoruz, karşı taraf yakalıyor
+ send(ev,data){
+  try{this.bc.postMessage({type:ev,data});}catch(e){}
+  try{localStorage.setItem("kp_sync_"+this.room,JSON.stringify({t:Date.now(),type:ev,data}));}catch(e){}
  }
- async leave(){
-  try{localStorage.removeItem("kp_room_"+this.roomName);}catch(e){}
+ poll(){
+  try{
+   const raw=localStorage.getItem("kp_sync_"+this.room);
+   if(raw){
+    const d=JSON.parse(raw);
+    if(d&&d.t>this.lastT&&d.type){
+     this.lastT=d.t;
+     if(this.listeners[d.type])this.listeners[d.type](d.data);
+    }
+   }
+  }catch(e){}
+ }
+ leave(){
+  clearInterval(this.iv);
+  try{this.bc.close();}catch(e){}
  }
 }
 
+let CS=null;
+function sync(){if(!ON||ME!=0||!CS)return;CS.send("state",{ph:PH,n:N,code:CODE,g:G?pack():null})}
+
 function listen(){
- RM.on("hello",d=>{if(ME!=0)return;N[1]=String((d&&d.n)||"Oyuncu 2").slice(0,12);const nw=!GUEST;GUEST=true;if(G)G.p[1].n=N[1];if(nw&&!G&&$("n1")){names();menu()}sync()});
- RM.on("act",d=>{if(ME!=0||!d)return;act(1,d.a)});
- RM.on("st",d=>{if(ME!=1)return;recv(d)});
- RM.on("rx",d=>{if(d&&typeof d.e=="string")fl(d.e.slice(0,4))});
+ CS.on("hello",d=>{if(ME!=0)return;N[1]=String((d&&d.n)||"Oyuncu 2").slice(0,12);const nw=!GUEST;GUEST=true;if(G)G.p[1].n=N[1];if(nw&&!G&&$("n1")){names();menu()}sync()});
+ CS.on("act",d=>{if(ME!=0||!d)return;act(1,d.a)});
+ CS.on("state",d=>{if(ME!=1)return;recv(d)});
+ CS.on("rx",d=>{if(d&&typeof d.e=="string")fl(d.e.slice(0,4))});
 }
+
 async function host(){
  names();if(!MY)return toast("Önce adını yaz");
  CODE=code();N=[MY,"Rakip"];
- RM=new PublicRoom(CODE);ON=true;ME=0;GUEST=false;PH="menu";listen();sync();menu();
+ if(CS)CS.leave();
+ CS=new CrossSync(CODE);ON=true;ME=0;GUEST=false;PH="menu";listen();sync();menu();
  toast("Oda kuruldu! Kod: "+CODE.toUpperCase());
 }
+
 async function joinRoom(c){
  names();if(!MY)return toast("Önce adını yaz");
  c=(c||"").trim().toLowerCase();if(c.length!=4)return toast("Oda kodu 4 harfli");
- CODE=c;RM=new PublicRoom(c);ON=true;ME=1;listen();
- RM.emit("hello",{n:MY});
- const iv=setInterval(()=>{if(LS||!ON){clearInterval(iv);return}RM.emit("hello",{n:MY})},2500);
+ CODE=c;if(CS)CS.leave();
+ CS=new CrossSync(c);ON=true;ME=1;listen();
+ CS.send("hello",{n:MY});
+ const iv=setInterval(()=>{if(LS||!ON){clearInterval(iv);return}CS.send("hello",{n:MY})},2000);
  wait();
 }
+
 function recv(d){const s=JSON.stringify(d);if(s==LS)return;LS=s;N=d.n;CODE=d.code;PH=d.ph;if(d.ph=="menu"){G=null;LK="";wait()}else{G=d.g;d.ph=="end"?endScreen():draw()}}
 function wait(){A.innerHTML=`<h1>⚔️ KAPIŞMA</h1><div class="res" style="text-align:center">${LS?`🟢 Odadasın! Oda: <b>${esc(CODE.toUpperCase())}</b><br>${esc(N[0])} oyunu seçiyor...`:"⏳ Odaya bağlanıldı, rakip bekleniyor..."}</div>${rx()}<button class="btn alt" id="lv">🚪 Odadan çık</button>`;bindRx();$("lv").onclick=leave}
 function rx(){return ON?`<div class="rx">${["😂","🔥","😱","👏","💸"].map(e=>`<button data-e="${e}">${e}</button>`).join("")}</div>`:""}
-function bindRx(){A.querySelectorAll(".rx button").forEach(b=>b.onclick=()=>RM&&RM.emit("rx",{e:b.dataset.e}))}
+function bindRx(){A.querySelectorAll(".rx button").forEach(b=>b.onclick=()=>CS&&CS.send("rx",{e:b.dataset.e}))}
+
 /* ---------- MENÜ ---------- */
 const bh=()=>{if($("md"))$("md").onclick=()=>{names();if(ON)leave();else{MODE=null;V=null;JN=false;menu()}}};
 function menu(){
@@ -211,12 +222,12 @@ neon:R0+'fill="#1a0b2e"/><rect x="8" y="14" width="184" height="106" rx="12" fil
 space:R0+'fill="#050816"/><circle cx="172" cy="26" r="11" fill="#c2410c"/>'};
 const G2=(a,b)=>[38,69,100,131,162].map(x=>[x,a]).concat([38,69,100,131,162].map(x=>[x,b]));
 const SL={ship:[[40,96],[66,96],[92,96],[118,96],[144,96],[52,113],[78,113],[104,113],[130,113],[156,113]],
-plate:[[100,68]].concat(Array.from({length:9},(_,i)=>{const t=i*Math.PI*2/9-Math.PI/2;return[100+60*Math.cos(t),68+30*Math.sin(t)]})),
+plate:[[100,68']].concat(Array.from({length:9},(_,i)=>{const t=i*Math.PI*2/9-Math.PI/2;return[100+60*Math.cos(t),68+30*Math.sin(t)]})),
 house:G2(70,95),field:G2(46,90),city:G2(52,94),map:G2(46,92),party:G2(58,88),neon:G2(48,88),space:G2(52,94)};
 function scene(p){const k=BG[G.c.k]?G.c.k:"map",n=p.s.length;
  const ph=SL[k].map((q,i)=>i<n?"":`<circle cx="${q[0]}" cy="${q[1]}" r="11" fill="rgba(0,0,0,.2)" stroke="#fff" stroke-opacity=".8" stroke-dasharray="3 3"/><text x="${q[0]}" y="${q[1]+2.8}" font-size="8" font-weight="700" text-anchor="middle" fill="#fff">${i+1}</text>`).join("");
  return `<div class="sc"><svg viewBox="0 8 200 118">${BG[k]}${ph}</svg>${p.s.slice(0,10).map((x,i)=>{const q=SL[k][i];return `<span class="it" style="left:${(q[0]/2).toFixed(1)}%;top:${((q[1]-8)/1.18).toFixed(1)}%" title="${esc(x.n)}">${ic(x.e)}</span>`}).join("")}</div>`}
-async function leave(){const my=N[ME];RM=null;ON=false;ME=0;GUEST=false;LS="";LK="";G=null;PH="menu";V=null;JN=false;MODE=null;N=[my,"Rakip"];menu()}
+async function leave(){const my=N[ME];if(CS)CS.leave();CS=null;ON=false;ME=0;GUEST=false;LS="";LK="";G=null;PH="menu";V=null;JN=false;MODE=null;N=[my,"Rakip"];menu()}
 function exitGame(){if(ON&&ME==1)return leave();G=null;PH="menu";LK="";V=null;sync();menu()}
 /* ---------- OYUN ---------- */
 async function play(c){
@@ -244,7 +255,7 @@ function act(i,a){
  else return;
  draw();sync();
 }
-function click(i,a){if(ON&&ME==1){RM.emit("act",{a});return}act(ON?0:i,a)}
+function click(i,a){if(ON&&ME==1){CS.send("act",{a});return}act(ON?0:i,a)}
 function pl(i){
  const p=G.p[i],mine=!ON||i==ME,l=LAST(),b=BID(),lead=l==i&&!G.res,cl=i?"b":"a",ok=!G.res;
  return `<div class="pl ${cl} ${lead?"on":""}"><div class="hd"><span>${i?"🩷":"💙"} ${esc(p.n)}${ON&&i==ME?" (sen)":""}</span><i>💵 ${p.b}$</i></div>
@@ -265,12 +276,12 @@ function draw(){
 }
 function endScreen(){
  A.innerHTML=`<h1>🏁 OYUN BİTTİ</h1>`+G.p.map((p,i)=>`<div class="pl ${i?"b":"a"}"><div class="hd"><span>${esc(p.n)}</span><i>💵 ${p.b}$</i></div>${scene(p)}<div class="box">${p.s.map(x=>`<div>${ic(x.e)} ${esc(x.n)} ${RAR[x.r||0][2]} <em>${x.price}$</em></div>`).join("")||"<em>Boş</em>"}</div></div>`).join('<div style="height:8px"></div>')+`<div class="res">${esc(G.v||"")}</div>${rx()}`+(ON&&ME==1?`<div class="mu" style="text-align:center">${esc(N[0])} yeni oyunu seçecek...</div><button class="btn alt" id="ex2">🚪 Odadan çık</button>`:`<button class="btn" id="ag">Yeni Oyun</button>`);
- if($("ex2"))$("ex2").onclick=leave;if($("ag"))$("ag").onclick=()=>{V=null;G=null;PH="menu";LK="";sync();menu()};bindRx();
+ if($("ex2"))$("ex2_{left}")||($("ex2").onclick=leave);if($("ag"))$("ag").onclick=()=>{V=null;G=null;PH="menu";LK="";sync();menu()};bindRx();
 }
 async function end(){
  PH="end";G.v="🏁 Oyun Tamamlandı!";endScreen();sync();
 }
-setInterval(()=>{if(ON&&ME==0&&GUEST)sync()},4000);
+setInterval(()=>{if(ON&&ME==0&&GUEST)sync()},3000);
 setTh(TH);$("tt").onclick=()=>setTh(TL[(TL.indexOf(TH)+1)%TL.length]);$("ts").title="Ses";$("ts").onclick=()=>{VOICE=!VOICE;$("ts").textContent=VOICE?"🔊":"🔇";if(!VOICE){try{speechSynthesis.cancel()}catch(e){}}};
 menu();
 </script></body></html>
