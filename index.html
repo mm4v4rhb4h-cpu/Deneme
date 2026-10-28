@@ -70,14 +70,14 @@ const GR=[
 ["Kahraman ve Anime","🦸","Süper Kahraman Mevkii|🦸;Avengers Takımı|🛡️;One Piece Ekibi|🏴‍☠️;Türk Rap Kadrosu|🎤;YouTuber Kadrosu|📹;Disney ve Pixar|🐭;Star Wars Mürettebatı|⚔️;Naruto Ekibi|🍥;Dragon Ball Ekibi|🐉;Pokémon Takımı|⚡;Anime Takımı|🎌;DC Takımı|🦇;Süper Kötüler Takımı|😈;Örümcek Evreni Takımı|🕷️;X-Men Takımı|🧬;Gotham Ekibi|🌃;Süper Kahraman Cephaneliği|🧰;Büyücü Takımı|🧙;Yüzük Kardeşliği|💍;Demon Slayer Kötüleri|👹;Dizi Rüya Takımı|📺;Sit-com Ev Arkadaşları|☕;Animasyon Rüya Takımı|🧽"],
 ["Macera","🏴‍☠️","Zombi Hayatta Kalma|🧟;Korsan Gemisi|⛵;Hayvan Takımı|🐺;Dövüşçü|🥊;Issız Ada Kurulumu|🏝️;Kale|🏰;Ejderha|🐉;Kıyamet Sığınağı|☢️;Kendi Canavarın Dünyası|👾;Kendi Ülken|🏛️;Eğlence Parkı|🎡;Kıyamet Takımı|🚛;Uzay Keşfi|🚀;Süper Güç Kiti|✨"],
 ["Parti","🎉","Doğum Günü Partisi|🎂;Havuz Partisi|🏊;Ev Partisi|🏠;Cadılar Bayramı Partisi|🎃;Kızlar Gecesi|💅;Kokteyl Partisi|🍸;Erkekler Gecesi|🍻;Bekarlığa Veda Partisi|👰;Hafta Sonu Festivali|🎪;İçki Oyunları Gecesi|🥂;Çatı Partisi|🌃;Plaj Partisi|🏖️;Mezuniyet Balosu|🎓"],
-["+18","🔥","Kışkırtıcı Yatak Odası|🌹;Yetişkin Partisi|🎭;Striptiz Kulübü (VIP Lounge)|💃;Seksi Kostüm|🎀;Yetişkin Oyunları|🎲;Balayı Suiti|🥂;Kaçamak Hafta Sonu|🏔️;Fantezi Gecesi|🕯️;OnlyFans Kurulumu|📸;Rüya Vücut|💪;Bahar Tatili|🌴;Vegas Gecesi|🎰"]
+["+18","🔥","Kışkırtıcı Yatak Odası|🌹;Yetişkin Partisi|🎭;Striptiz Kulübü (VIP Lounge)|💃;Seksi Kostüm|🎀;Yetişkin Oyunları|🎲;Balayı Suiti|🥂;Kaçamak Hafta Sonu|🏔️;Fantezi Gecesi|🕯️;OnlyFans Kurulumu|📸;Rüya Vücut|💪;Bahar Tatili|🌴;Vegas Gelecek|🎰"]
 ].map(g=>({t:g[0],e:g[1],c:g[2].split(";").map(s=>{const [t,e]=s.split("|");return{t,e,g:g[0],i:IT[t]?IT[t].split("|"):null}})}));
 const A=document.getElementById("app"),$=id=>document.getElementById(id);
 const rnd=a=>a[Math.floor(Math.random()*a.length)];
 const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const RAR=[["Sıradan","#9aa6c8",""],["Nadir","#60a5fa","💠"],["Efsane","#facc15","⭐"]];
-let N=["Oyuncu","Rakip"],MY="",MY2="",MODE=null,VOICE=true,SPOKEN="",TH="sky",MUTE=false,LT="",V=null,G=null,SP,RM=null,ME=0,ON=false,CODE="",PH="menu",GUEST=false,AG=false,CR=false,JN=false,LS="",LK="",LB=0,LR=-1,AC;
+let N=["Oyuncu","Rakip"],MY="",MY2="",MODE=null,VOICE=true,SPOKEN="",TH="sky",MUTE=false,LT="",V=null,G=null,SP,RM=null,ME=0,ON=false,CODE="",PH="menu",GUEST=false,AG=false,CR=false,JN=false,LS="",LK="",LB=0,LR=-1;
 const FX=false;
 const SIL="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAABErAAABAAgAZGF0YQAAAAA=";
 const POOL=[],WC={};let PI=0,UNL=false;
@@ -104,9 +104,9 @@ class CrossSync{
   this.room=room;
   this.bc=new BroadcastChannel("kapisma_"+room);
   this.listeners={};
+  this.lastT=0;
   this.bc.onmessage=e=>{if(e.data&&this.listeners[e.data.type])this.listeners[e.data.type](e.data.data)};
-  // Supabase / Public Realtime Channel yedek polling
-  this.iv=setInterval(()=>this.poll(),800);
+  this.iv=setInterval(()=>this.poll(),600);
  }
  on(ev,cb){this.listeners[ev]=cb;}
  send(ev,data){
@@ -190,98 +190,4 @@ function menu(){
   if($("cg"))$("cg").onclick=()=>{const t=$("ct").value.trim();if(!t)return toast("Bir kategori adı yaz");names();const c={t,e:g.e,g:g.t,i:null};g.c.push(c);CR=false;play(c)};
  }
 }
-async function sample(){if(SP!==undefined)return SP;try{SP=window.claude?await claude.use("sample"):null}catch(e){SP=null}return SP}
-async function fill(c){
- if(c.i)return true;
- A.innerHTML=`<div class="mid"><div class="em">✨</div><div class="nm">Yapay zeka "${esc(c.t)}" için 20 malzeme hazırlıyor...</div></div>`;
- const sp=await sample();
- if(!sp){c.i=["🍞 Ekmek","🧀 Peynir","🍅 Domates","🥒 Salatalık","🥚 Yumurta","🥓 Salam","🧈 Tereyağı","🍯 Bal","☕ Çay","🫒 Zeytin"];return true}
- try{
-  const r=await sp.json(`Eğlenceli bir muzayede oyunu için "${c.t}" (bölüm: ${c.g}) temalı 20 farklı malzeme yaz. SADECE JSON dizisi döndür: ["emoji Türkçe malzeme adı", ...] tam 20 adet.`);
-  if(Array.isArray(r)&&r.length>=10){c.i=r.slice(0,20).map(String);return true}
- }catch(e){}
- c.i=["🍞 Ekmek","🧀 Peynir","🍅 Domates","🥒 Salatalık","🥚 Yumurta","🥓 Salam","🧈 Tereyağı","🍯 Bal","☕ Çay","🫒 Zeytin"];return true;
-}
-const pickR=()=>{const x=Math.random();return x<.6?0:x<.9?1:2};
-function parse(s,c){const m=s.match(/^(\S+)\s+(.+)$/);const r=pickR();let e=c.e,n=s;if(m&&!/^[\p{L}\p{N}]/u.test(m[1])){e=m[1];n=m[2]}return{e,n,r}}
-
-const SV={sufle:'<svg viewBox="0 0 24 24" width="1em" height="1em" style="vertical-align:-.12em"><path d="M3.5 13h17l-2 8H5.5z" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1"/><path d="M4.5 13c0-6 3.2-9 7.5-9s7.5 3 7.5 9z" fill="#5b2c14"/></svg>'};
-const ic=e=>e&&e[0]=="@"?(SV[e.slice(1)]||"❓"):e;
-const KM={"Yemek":"plate","Yaşam":"house","Spor ve Oyun":"field","Kahraman ve Anime":"city","Macera":"map","Parti":"party","+18":"neon"};
-const kindOf=c=>c.t=="Korsan Gemisi"?"ship":c.t=="Uzay Keşfi"?"space":KM[c.g]||"map";
-const R0='<rect x="0" y="8" width="200" height="118" ';
-const BG={
-ship:R0+'fill="#bfe7ff"/><circle cx="26" cy="28" r="11" fill="#ffd54a"/><path d="M0 124Q25 116 50 124T100 124T150 124T200 124V126H0Z" fill="#1e6fd9"/><path d="M22 84H178L158 122H44Z" fill="#7c4a1e" stroke="#4a2a0c" stroke-width="2"/>',
-plate:R0+'fill="#c0392b"/><ellipse cx="100" cy="70" rx="95" ry="55" fill="#dfe6f0"/><ellipse cx="100" cy="68" rx="82" ry="46" fill="#f8fafc" stroke="#c3cddd" stroke-width="2"/>',
-house:R0+'fill="#9fd8ff"/><rect x="0" y="108" width="200" height="18" fill="#5cb85c"/><path d="M14 54L100 14L186 54Z" fill="#b5483a"/><rect x="24" y="54" width="152" height="56" fill="#f5e6c8"/>',
-field:R0+'fill="#2e8b3d"/><rect x="10" y="16" width="180" height="102" fill="none" stroke="#fff" stroke-width="1.5"/>',
-city:R0+'fill="#1a1b4b"/><rect x="8" y="58" width="32" height="68" fill="#2b2f6b"/><rect x="44" y="38" width="28" height="88" fill="#2b2f6b"/>',
-map:R0+'fill="#8fc7e8"/><rect x="4" y="12" width="192" height="110" rx="6" fill="#e8d2a0" stroke="#a9834a" stroke-width="3"/>',
-party:R0+'fill="#ffe3f1"/><path d="M0 14Q100 40 200 14" stroke="#666" fill="none"/>',
-neon:R0+'fill="#1a0b2e"/><rect x="8" y="14" width="184" height="106" rx="12" fill="none" stroke="#ff2bd6" stroke-width="3"/>',
-space:R0+'fill="#050816"/><circle cx="172" cy="26" r="11" fill="#c2410c"/>'};
-const G2=(a,b)=>[38,69,100,131,162].map(x=>[x,a]).concat([38,69,100,131,162].map(x=>[x,b]));
-const SL={ship:[[40,96],[66,96],[92,96],[118,96],[144,96],[52,113],[78,113],[104,113],[130,113],[156,113]],
-plate:[[100,68']].concat(Array.from({length:9},(_,i)=>{const t=i*Math.PI*2/9-Math.PI/2;return[100+60*Math.cos(t),68+30*Math.sin(t)]})),
-house:G2(70,95),field:G2(46,90),city:G2(52,94),map:G2(46,92),party:G2(58,88),neon:G2(48,88),space:G2(52,94)};
-function scene(p){const k=BG[G.c.k]?G.c.k:"map",n=p.s.length;
- const ph=SL[k].map((q,i)=>i<n?"":`<circle cx="${q[0]}" cy="${q[1]}" r="11" fill="rgba(0,0,0,.2)" stroke="#fff" stroke-opacity=".8" stroke-dasharray="3 3"/><text x="${q[0]}" y="${q[1]+2.8}" font-size="8" font-weight="700" text-anchor="middle" fill="#fff">${i+1}</text>`).join("");
- return `<div class="sc"><svg viewBox="0 8 200 118">${BG[k]}${ph}</svg>${p.s.slice(0,10).map((x,i)=>{const q=SL[k][i];return `<span class="it" style="left:${(q[0]/2).toFixed(1)}%;top:${((q[1]-8)/1.18).toFixed(1)}%" title="${esc(x.n)}">${ic(x.e)}</span>`}).join("")}</div>`}
-async function leave(){const my=N[ME];if(CS)CS.leave();CS=null;ON=false;ME=0;GUEST=false;LS="";LK="";G=null;PH="menu";V=null;JN=false;MODE=null;N=[my,"Rakip"];menu()}
-function exitGame(){if(ON&&ME==1)return leave();G=null;PH="menu";LK="";V=null;sync();menu()}
-/* ---------- OYUN ---------- */
-async function play(c){
- if(MODE=="off"?(!MY||!MY2):!MY){toast(MODE=="off"?"İki ismi de yaz":"Önce adını yaz");menu();return}
- if(ON&&!GUEST){toast("Önce arkadaşın odaya katılsın");return}
- if(!(await fill(c))){menu();return}
- G={c:{t:c.t,e:c.e,k:kindOf(c)},items:shuf(c.i).slice(0,10).map(s=>parse(s,c)),r:0,p:[0,1].map(i=>({n:N[i],b:20,s:[]})),h:[],starter:0,res:null};
- PH="game";SPOKEN="";try{speechSynthesis.cancel()}catch(e){}round();
-}
-function round(){
- if(G.r>=G.items.length)return end();
- let st=G.r%2;if(G.p[st].b<1)st=1-st;
- if(G.p[st].b<1)return end();
- G.starter=st;G.h=[st];G.res=null;draw();sync();
-}
-const BID=()=>G.h.length,LAST=()=>G.h[G.h.length-1];
-function act(i,a){
- if(!G||PH!="game")return;
- if(a=="nx"){if(G.res){G.r++;round()}return}
- if(G.res)return;
- const l=LAST();
- if(a=="plus"){if(i==l||G.p[i].b<BID()+1)return;G.h.push(i)}
- else if(a=="minus"){if(i!=l||G.h.length<2)return;G.h.pop()}
- else if(a=="pas"){if(i==l)return;const p=G.p[l],it=G.items[G.r];p.b-=BID();p.s.push({...it,price:BID()});G.res=`🎉 ${p.n}, ${it.n} aldı! (${BID()}$)`}
- else return;
- draw();sync();
-}
-function click(i,a){if(ON&&ME==1){CS.send("act",{a});return}act(ON?0:i,a)}
-function pl(i){
- const p=G.p[i],mine=!ON||i==ME,l=LAST(),b=BID(),lead=l==i&&!G.res,cl=i?"b":"a",ok=!G.res;
- return `<div class="pl ${cl} ${lead?"on":""}"><div class="hd"><span>${i?"🩷":"💙"} ${esc(p.n)}${ON&&i==ME?" (sen)":""}</span><i>💵 ${p.b}$</i></div>
- <div class="mu">${G.starter==i?"⭐ Bu turu başlatan ":""}${lead?"👑 En yüksek teklif":""}</div>
- ${scene(p)}
- <div class="box">${p.s.length?p.s.map(x=>`<div>${ic(x.e)} ${esc(x.n)} ${RAR[x.r||0][2]} <em>${x.price}$</em></div>`).join(""):'<em>Henüz bir şey almadı</em>'}</div>
- ${mine?`<div class="bb"><button class="mn" data-a="minus" data-i="${i}" ${ok&&l==i&&b>1?"":"disabled"}>−</button><button data-a="plus" data-i="${i}" ${ok&&l!=i&&p.b>=b+1?"":"disabled"}>+ ${b+1}$</button><button class="pas" data-a="pas" data-i="${i}" ${ok&&l!=i?"":"disabled"}>Pas</button></div>`:""}</div>`;
-}
-function draw(){
- const it=G.items[G.r],R=RAR[it.r||0],b=BID(),l=LAST();
- const nw=G.r!=LR;LR=G.r;
- const k=G.r+(G.res?"s":"b");if(k!=LK){LK=k;if(G.res)for(let j=0;j<6;j++)setTimeout(()=>fl(rnd(["🎉","✨","💰","🎊"])),j*90)}
- const info=G.res?`<div class="nm">${esc(G.res)}</div><button class="btn" id="nx">Sıradaki ➜</button>`:`<div class="mu">👑 ${esc(G.p[l].n)} en yüksek teklifte${b==1?" (başlangıç 1$)":""}</div>`;
- const order=ON?(ME==0?[1,0]:[0,1]):[0,1];
- A.innerHTML=pl(order[0])+`<div class="mid"><div class="mu">Tur ${G.r+1}/${G.items.length} · ${esc(G.c.t)}</div><div class="rar" style="color:${R[1]};border-color:${R[1]}">${R[2]} ${R[0]}</div><div class="em ${nw?"pop":""}" style="${it.r?`filter:drop-shadow(0 0 14px ${R[1]})`:""}">${ic(it.e)}</div><div class="nm">${esc(it.n)}</div><div class="price">${b}$</div>${info}${rx()}</div>`+pl(order[1])+`<button class="back" id="ex" style="width:100%;margin-top:8px">✕ Oyundan çık</button>`;
- A.querySelectorAll("button[data-a]").forEach(x=>x.onclick=()=>click(+x.dataset.i,x.dataset.a));
- if($("ex"))$("ex").onclick=exitGame;const nx=$("nx");if(nx)nx.onclick=()=>click(0,"nx");bindRx();
-}
-function endScreen(){
- A.innerHTML=`<h1>🏁 OYUN BİTTİ</h1>`+G.p.map((p,i)=>`<div class="pl ${i?"b":"a"}"><div class="hd"><span>${esc(p.n)}</span><i>💵 ${p.b}$</i></div>${scene(p)}<div class="box">${p.s.map(x=>`<div>${ic(x.e)} ${esc(x.n)} ${RAR[x.r||0][2]} <em>${x.price}$</em></div>`).join("")||"<em>Boş</em>"}</div></div>`).join('<div style="height:8px"></div>')+`<div class="res">${esc(G.v||"")}</div>${rx()}`+(ON&&ME==1?`<div class="mu" style="text-align:center">${esc(N[0])} yeni oyunu seçecek...</div><button class="btn alt" id="ex2">🚪 Odadan çık</button>`:`<button class="btn" id="ag">Yeni Oyun</button>`);
- if($("ex2"))$("ex2_{left}")||($("ex2").onclick=leave);if($("ag"))$("ag").onclick=()=>{V=null;G=null;PH="menu";LK="";sync();menu()};bindRx();
-}
-async function end(){
- PH="end";G.v="🏁 Oyun Tamamlandı!";endScreen();sync();
-}
-setInterval(()=>{if(ON&&ME==0&&GUEST)sync()},3000);
-setTh(TH);$("tt").onclick=()=>setTh(TL[(TL.indexOf(TH)+1)%TL.length]);$("ts").title="Ses";$("ts").onclick=()=>{VOICE=!VOICE;$("ts").textContent=VOICE?"🔊":"🔇";if(!VOICE){try{speechSynthesis.cancel()}catch(e){}}};
-menu();
-</script></body></html>
+async function sample(){if(SP!==undefined)return SP;try{SP=window.claude?await claude.use("sample"):null}catch(e){SP=null}return SP
