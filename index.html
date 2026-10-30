@@ -3,271 +3,283 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Red Ball Tarzı Web Oyunu</title>
+    <title>Neon Blast - Evrimleşen Blok Bulmaca</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background-color: #0f172a; color: white; font-family: 'Inter', sans-serif; overflow: hidden; touch-action: none; }
-        canvas { background: linear-gradient(to bottom, #38bdf8, #bae6fd); display: block; margin: 0 auto; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5); }
+        body { background-color: #090d16; color: white; font-family: 'Inter', sans-serif; touch-action: none; overflow: hidden; }
+        .grid-cell { width: 36px; height: 36px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; transition: all 0.2s; }
+        .shape-cell { width: 24px; height: 24px; border-radius: 4px; }
     </style>
 </head>
-<body class="flex flex-col items-center justify-center h-screen select-none">
+<body class="flex flex-col items-center justify-between h-screen p-4 select-none">
 
-    <!-- ÜST BİLGİ -->
-    <div class="absolute top-4 w-full max-w-2xl px-4 flex justify-between items-center text-slate-900 font-bold z-10">
-        <div class="bg-white/80 backdrop-blur px-4 py-1.5 rounded-full shadow text-sm">
-            ❤️ CAN: <span id="ui-lives" class="text-red-600">3</span>
+    <!-- ÜST BİLGİ VE TEMA GÖSTERGESİ -->
+    <header class="w-full max-w-md flex justify-between items-center bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-2xl shadow-xl">
+        <div>
+            <div class="text-[10px] text-slate-400 font-mono">SKOR</div>
+            <div id="score" class="text-2xl font-extrabold text-cyan-400 font-mono">0</div>
         </div>
-        <div class="bg-white/80 backdrop-blur px-4 py-1.5 rounded-full shadow text-sm">
-            ⭐ ALTIN: <span id="ui-score" class="text-amber-500">0</span> / 5
+        <div class="text-center">
+            <div class="text-[10px] text-slate-400 font-mono">MOD / TEMA</div>
+            <div id="theme-name" class="text-xs font-bold text-amber-400">1. SEVİYE: NEON GECE</div>
+        </div>
+        <div>
+            <div class="text-[10px] text-slate-400 font-mono">EN YÜKSEK</div>
+            <div id="highscore" class="text-2xl font-extrabold text-emerald-400 font-mono">0</div>
+        </div>
+    </header>
+
+    <!-- 8x8 OYUN TAHTASI -->
+    <main class="flex flex-col items-center justify-center my-auto">
+        <div id="board" class="grid grid-cols-8 gap-1.5 bg-slate-900/90 p-3 rounded-2xl border-2 border-slate-800 shadow-2xl"></div>
+    </main>
+
+    <!-- ALT BLOK SEÇENEKLERİ -->
+    <footer class="w-full max-w-md bg-slate-900/80 backdrop-blur border border-slate-800 p-4 rounded-2xl shadow-xl flex justify-around items-center min-h-[110px]" id="shapes-container">
+        <!-- Bloklar buraya dinamik gelecek -->
+    </footer>
+
+    <!-- OYUN BİTTİ EKRANI -->
+    <div id="game-over-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex-col items-center justify-center p-6 z-50 text-center">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-w-xs w-full shadow-2xl space-y-4">
+            <div class="w-16 h-16 bg-red-500/20 text-red-500 rounded-2xl flex items-center justify-center mx-auto text-3xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white">HAMLE KALMADI!</h2>
+            <p class="text-xs text-slate-400">Tahta doldu ve yeni blok sığmıyor.</p>
+            <button onclick="resetGame()" class="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl shadow-lg transition">TEKRAR DENE</button>
         </div>
     </div>
 
-    <!-- OYUN ALANI (CANVAS) -->
-    <div class="relative w-full max-w-2xl">
-        <canvas id="gameCanvas" width="800" height="400" class="w-full rounded-2xl border-4 border-slate-700"></canvas>
-        
-        <!-- OYUN BİTTİ / KAZANDIN EKRANI (BAŞLANGIÇTA GİZLİ) -->
-        <div id="game-overlay" class="absolute inset-0 bg-black/70 backdrop-blur-sm hidden flex-col items-center justify-center text-center p-6 rounded-2xl z-20">
-            <h2 id="overlay-title" class="text-3xl font-extrabold text-white mb-2">OYUN BİTTİ</h2>
-            <p id="overlay-desc" class="text-sm text-slate-300 mb-4">Tekrar denemek ister misin?</p>
-            <button onclick="restartGame()" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl shadow-lg transition">TEKRAR OYNA</button>
-        </div>
-    </div>
-
-    <!-- MOBİL / TABLET DOKUNMATİK KONTROLLERİ -->
-    <div class="w-full max-w-2xl px-4 mt-4 flex justify-between items-center z-10">
-        <div class="flex space-x-3">
-            <button ontouchstart="keys.left=true" ontouchend="keys.left=false" onmousedown="keys.left=true" onmouseup="keys.left=false" class="w-16 h-16 bg-slate-800 active:bg-slate-700 border-2 border-slate-600 rounded-2xl flex items-center justify-center text-2xl shadow-lg text-white">
-                <i class="fa-solid fa-arrow-left"></i>
-            </button>
-            <button ontouchstart="keys.right=true" ontouchend="keys.right=false" onmousedown="keys.right=true" onmouseup="keys.right=false" class="w-16 h-16 bg-slate-800 active:bg-slate-700 border-2 border-slate-600 rounded-2xl flex items-center justify-center text-2xl shadow-lg text-white">
-                <i class="fa-solid fa-arrow-right"></i>
-            </button>
-        </div>
-        <button ontouchstart="keys.jump=true" ontouchend="keys.jump=false" onmousedown="keys.jump=true" onmouseup="keys.jump=false" class="w-20 h-16 bg-red-600 active:bg-red-500 border-2 border-red-400 rounded-2xl flex items-center justify-center text-xl font-bold shadow-lg text-white">
-            Zıpla 🚀
-        </button>
-    </div>
-
-    <!-- OYUN MOTORU KODLARI -->
+    <!-- OYUN MANTIĞI VE EVRİM SİSTEMİ -->
     <script>
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
-
-        let keys = { left: false, right: false, jump: false };
+        const GRID_SIZE = 8;
+        let board = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(0));
         let score = 0;
-        let lives = 3;
-        let gameOver = false;
-        let gameWon = false;
+        let highscore = 0;
+        let currentShapes = [];
 
-        // Oyuncu (Kırmızı Top)
-        let player = {
-            x: 50, y: 250, radius: 20,
-            vx: 0, vy: 0, speed: 4, jumpPower: -10,
-            gravity: 0.5, grounded: false
-        };
-
-        // Zeminler, Engeller ve Altınlar
-        let platforms = [
-            { x: 0, y: 350, w: 900, h: 50 },  // Ana Zemin
-            { x: 300, y: 260, w: 150, h: 20 }, // Platform 1
-            { x: 550, y: 180, w: 150, h: 20 }  // Platform 2
+        // Skorlara Göre Evrilen Renk Paletleri ve Temalar
+        const themes = [
+            { threshold: 0, name: "1. SEVİYE: NEON GECE", colors: ['#38bdf8', '#818cf8', '#c084fc'] },
+            { threshold: 300, name: "2. SEVİYE: SİBERPUNK", colors: ['#f43f5e', '#fb923c', '#facc15'] },
+            { threshold: 800, name: "3. SEVİYE: DİGİTAL ORMAN", colors: ['#34d399', '#22d3ee', '#10b981'] },
+            { threshold: 1500, name: "4. SEVİYE: ALTIN ÇAĞ", colors: ['#fbbf24', '#f59e0b', '#d97706'] }
         ];
 
-        let spikes = [
-            { x: 350, y: 330, w: 30, h: 20 },
-            { x: 600, y: 160, w: 30, h: 20 }
+        const SHAPES = [
+            [[1]], // Tekli
+            [[1, 1]], // 2 yatay
+            [[1], [1]], // 2 dikey
+            [[1, 1, 1]], // 3 yatay
+            [[1], [1], [1]], // 3 dikey
+            [[1, 1], [1, 1]], // 2x2 Kare
+            [[1, 1, 1], [0, 1, 0]], // T şekli
+            [[1, 0], [1, 1]] // L şekli
         ];
 
-        let coins = [
-            { x: 365, y: 220, r: 10, collected: false },
-            { x: 615, y: 140, r: 10, collected: false },
-            { x: 750, y: 310, r: 10, collected: false }
-        ];
+        function getCurrentTheme() {
+            let activeTheme = themes[0];
+            for (let t of themes) {
+                if (score >= t.threshold) activeTheme = t;
+            }
+            return activeTheme;
+        }
 
-        let flag = { x: 770, y: 270, w: 20, h: 80 };
+        function initBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'grid-cell flex items-center justify-center';
+                    cell.dataset.row = r;
+                    cell.dataset.col = c;
+                    if (board[r][c] !== 0) {
+                        cell.style.background = board[r][c];
+                        cell.style.borderColor = board[r][c];
+                        cell.style.boxShadow = `0 0 10px ${board[r][c]}`;
+                    }
+                    boardEl.appendChild(cell);
+                }
+            }
+        }
 
-        // Klavye Dinleyicileri (Bilgisayardan oynamak isteyenler için)
-        window.addEventListener("keydown", e => {
-            if (e.key === "ArrowLeft" || e.key === "a") keys.left = true;
-            if (e.key === "ArrowRight" || e.key === "d") keys.right = true;
-            if (e.key === "ArrowUp" || e.key === " " || e.key === "w") keys.jump = true;
+        function getRandomColor() {
+            const theme = getCurrentTheme();
+            return theme.colors[Math.floor(Math.random() * theme.colors.length)];
+        }
+
+        function generateShapes() {
+            currentShapes = [];
+            for (let i = 0; i < 3; i++) {
+                const randomShape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+                currentShapes.push({
+                    matrix: randomShape,
+                    color: getRandomColor()
+                });
+            }
+            renderShapes();
+            checkGameOver();
+        }
+
+        function renderShapes() {
+            const container = document.getElementById('shapes-container');
+            container.innerHTML = '';
+            currentShapes.forEach((shape, index) => {
+                if (!shape) return;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'flex flex-col items-center justify-center p-2 cursor-pointer bg-slate-950/60 border border-slate-800 rounded-xl hover:border-cyan-500 transition';
+                wrapper.onclick = () => selectShape(index);
+
+                const table = document.createElement('div');
+                table.className = 'grid gap-1';
+                table.style.gridTemplateColumns = `repeat(${shape.matrix[0].length}, 24px)`;
+
+                shape.matrix.forEach(row => {
+                    row.forEach(val => {
+                        const cell = document.createElement('div');
+                        cell.className = 'shape-cell';
+                        if (val === 1) {
+                            cell.style.background = shape.color;
+                            cell.style.boxShadow = `0 0 8px ${shape.color}`;
+                        }
+                        table.appendChild(cell);
+                    });
+                });
+                wrapper.appendChild(table);
+                container.appendChild(wrapper);
+            });
+        }
+
+        let selectedShapeIndex = null;
+        function selectShape(index) {
+            selectedShapeIndex = index;
+            // Görsel olarak seçildiğini belirt
+            const containers = document.getElementById('shapes-container').children;
+            for(let i=0; i<containers.length; i++) {
+                containers[i].style.borderColor = i === index ? '#06b6d4' : '#1e293b';
+            }
+        }
+
+        // Tahtaya tıklama ile yerleştirme (Mobil/Tablet dostu)
+        document.getElementById('board').addEventListener('click', e => {
+            const cell = e.target.closest('.grid-cell');
+            if (!cell || selectedShapeIndex === null) return;
+
+            const r = parseInt(cell.dataset.row);
+            const c = parseInt(cell.dataset.col);
+            const shape = currentShapes[selectedShapeIndex];
+
+            if (canPlace(shape.matrix, r, c)) {
+                placeShape(shape.matrix, r, c, shape.color);
+                currentShapes[selectedShapeIndex] = null;
+                selectedShapeIndex = null;
+                score += 10;
+                checkLines();
+                initBoard();
+                renderShapes();
+
+                // Tema güncelleme kontrolü
+                const theme = getCurrentTheme();
+                document.getElementById('theme-name').innerText = theme.name;
+
+                if (currentShapes.every(s => s === null)) {
+                    generateShapes();
+                }
+            }
         });
-        window.addEventListener("keyup", e => {
-            if (e.key === "ArrowLeft" || e.key === "a") keys.left = false;
-            if (e.key === "ArrowRight" || e.key === "d") keys.right = false;
-            if (e.key === "ArrowUp" || e.key === " " || e.key === "w") keys.jump = false;
-        });
 
-        function update() {
-            if (gameOver || gameWon) return;
+        function canPlace(matrix, startR, startC) {
+            for (let r = 0; r < matrix.length; r++) {
+                for (let c = 0; c < matrix[r].length; c++) {
+                    if (matrix[r][c] === 1) {
+                        let targetR = startR + r;
+                        let targetC = startC + c;
+                        if (targetR >= GRID_SIZE || targetC >= GRID_SIZE || board[targetR][targetC] !== 0) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
 
-            // Yatay Hareket
-            if (keys.left) player.vx = -player.speed;
-            else if (keys.right) player.vx = player.speed;
-            else player.vx = 0;
+        function placeShape(matrix, startR, startC, color) {
+            for (let r = 0; r < matrix.length; r++) {
+                for (let c = 0; c < matrix[r].length; c++) {
+                    if (matrix[r][c] === 1) {
+                        board[startR + r][startC + c] = color;
+                    }
+                }
+            }
+        }
 
-            player.x += player.vx;
+        function checkLines() {
+            let linesCleared = 0;
+            // Satır kontrolü
+            for (let r = 0; r < GRID_SIZE; r++) {
+                if (board[r].every(cell => cell !== 0)) {
+                    board[r] = Array(GRID_SIZE).fill(0);
+                    linesCleared++;
+                }
+            }
+            // Sütun kontrolü
+            for (let c = 0; c < GRID_SIZE; c++) {
+                let full = true;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    if (board[r][c] === 0) full = false;
+                }
+                if (full) {
+                    for (let r = 0; r < GRID_SIZE; r++) {
+                        board[r][c] = 0;
+                    }
+                    linesCleared++;
+                }
+            }
 
-            // Yerçekimi
-            player.vy += player.gravity;
-            player.y += player.vy;
-            player.grounded = false;
+            if (linesCleared > 0) {
+                score += linesCleared * 100 * linesCleared; // Kombo Çarpanı
+                document.getElementById('score').innerText = score;
+                if (score > highscore) {
+                    highscore = score;
+                    document.getElementById('highscore').innerText = highscore;
+                }
+            }
+        }
 
-            // Zemin Çarpışmaları
-            platforms.forEach(p => {
-                if (player.x + player.radius > p.x && player.x - player.radius < p.x + p.w &&
-                    player.y + player.radius > p.y && player.y - player.radius < p.y + p.h) {
-                    // Üstten çarpma
-                    if (player.vy > 0 && player.y - player.radius < p.y) {
-                        player.y = p.y - player.radius;
-                        player.vy = 0;
-                        player.grounded = true;
+        function checkGameOver() {
+            // Eğer kalan hiçbir şekil tahtaya sığmıyorsa oyun biter
+            let possible = false;
+            currentShapes.forEach(shape => {
+                if (!shape) return;
+                for (let r = 0; r < GRID_SIZE; r++) {
+                    for (let c = 0; c < GRID_SIZE; c++) {
+                        if (canPlace(shape.matrix, r, c)) possible = true;
                     }
                 }
             });
 
-            // Zıplama
-            if (keys.jump && player.grounded) {
-                player.vy = player.jumpPower;
-                player.grounded = false;
-            }
-
-            // Diken Çarpışmaları (Can Kaybı)
-            spikes.forEach(s => {
-                if (player.x + player.radius > s.x && player.x - player.radius < s.x + s.w &&
-                    player.y + player.radius > s.y && player.y - player.radius < s.y + s.h) {
-                    loseLife();
-                }
-            });
-
-            // Altın Toplama
-            coins.forEach(c => {
-                if (!c.collected && Math.hypot(player.x - c.x, player.y - c.y) < player.radius + c.r) {
-                    c.collected = true;
-                    score++;
-                    document.getElementById("ui-score").innerText = score;
-                }
-            });
-
-            // Bitiş Bayrağı
-            if (player.x + player.radius > flag.x && player.y + player.radius > flag.y) {
-                gameWon = true;
-                showOverlay("TEBRİKLER KAPTAN!", "Bölümü başarıyla tamamladın!");
-            }
-
-            // Ekran Dışı Düşme
-            if (player.y > canvas.height) {
-                loseLife();
+            if (!possible && currentShapes.some(s => s !== null)) {
+                document.getElementById('game-over-modal').classList.remove('hidden');
+                document.getElementById('game-over-modal').classList.add('flex');
             }
         }
 
-        function loseLife() {
-            lives--;
-            document.getElementById("ui-lives").innerText = lives;
-            if (lives <= 0) {
-                gameOver = true;
-                showOverlay("OYUN BİTTİ", "Canın bitti, tekrar dene!");
-            } else {
-                // Başlangıç noktasına resetle
-                player.x = 50;
-                player.y = 250;
-                player.vx = 0;
-                player.vy = 0;
-            }
-        }
-
-        function showOverlay(title, desc) {
-            document.getElementById("overlay-title").innerText = title;
-            document.getElementById("overlay-desc").innerText = desc;
-            document.getElementById("game-overlay").classList.remove("hidden");
-            document.getElementById("game-overlay").classList.add("flex");
-        }
-
-        function restartGame() {
-            lives = 3;
+        function resetGame() {
+            board = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(0));
             score = 0;
-            gameOver = false;
-            gameWon = false;
-            document.getElementById("ui-lives").innerText = lives;
-            document.getElementById("ui-score").innerText = score;
-            coins.forEach(c => c.collected = false);
-            player.x = 50;
-            player.y = 250;
-            player.vx = 0;
-            player.vy = 0;
-            document.getElementById("game-overlay").classList.remove("flex");
-            document.getElementById("game-overlay").classList.add("hidden");
+            document.getElementById('score').innerText = score;
+            document.getElementById('game-over-modal').classList.remove('flex');
+            document.getElementById('game-over-modal').classList.add('hidden');
+            initBoard();
+            generateShapes();
         }
 
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Zeminleri Çiz
-            ctx.fillStyle = "#1e293b";
-            platforms.forEach(p => {
-                ctx.fillRect(p.x, p.y, p.w, p.h);
-            });
-
-            // Dikenleri Çiz
-            ctx.fillStyle = "#ef4444";
-            spikes.forEach(s => {
-                ctx.beginPath();
-                ctx.moveTo(s.x, s.y + s.h);
-                ctx.lineTo(s.x + s.w / 2, s.y);
-                ctx.lineTo(s.x + s.w, s.y + s.h);
-                ctx.fill();
-            });
-
-            // Altınları Çiz
-            coins.forEach(c => {
-                if (!c.collected) {
-                    ctx.fillStyle = "#f59e0b";
-                    ctx.beginPath();
-                    ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.strokeStyle = "#d97706";
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                }
-            });
-
-            // Bitiş Bayrağı Çiz
-            ctx.fillStyle = "#94a3b8";
-            ctx.fillRect(flag.x, flag.y, flag.w, flag.h);
-            ctx.fillStyle = "#22c55e";
-            ctx.fillRect(flag.x + flag.w, flag.y, 30, 20);
-
-            // Oyuncuyu Çiz (Kırmızı Top)
-            ctx.fillStyle = "#dc2626";
-            ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = "#991b1b";
-            ctx.lineWidth = 3;
-            ctx.stroke();
-
-            // Topun Gözleri (Red Ball havası)
-            ctx.fillStyle = "white";
-            ctx.beginPath();
-            ctx.arc(player.x + 5, player.y - 4, 4, 0, Math.PI * 2);
-            ctx.arc(player.x + 12, player.y - 4, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = "black";
-            ctx.beginPath();
-            ctx.arc(player.x + 6, player.y - 4, 1.5, 0, Math.PI * 2);
-            ctx.arc(player.x + 13, player.y - 4, 1.5, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
-
-        loop();
+        // Oyunu Başlat
+        initBoard();
+        generateShapes();
     </script>
 </body>
 </html>
