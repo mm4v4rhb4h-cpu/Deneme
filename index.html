@@ -3,26 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Neon Blast - Evrimleşen Blok Bulmaca</title>
+    <title>Neon Blast - Sürükle Bırak</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background-color: #090d16; color: white; font-family: 'Inter', sans-serif; touch-action: none; overflow: hidden; }
-        .grid-cell { width: 36px; height: 36px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; transition: all 0.2s; }
-        .shape-cell { width: 24px; height: 24px; border-radius: 4px; }
+        body { background-color: #050811; color: white; font-family: 'Inter', sans-serif; touch-action: none; overflow: hidden; user-select: none; }
+        .grid-cell { width: 38px; height: 38px; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; transition: background 0.15s; }
+        .draggable-shape { touch-action: none; cursor: grab; transition: transform 0.1s; }
+        .draggable-shape:active { cursor: grabbing; transform: scale(1.1); }
     </style>
 </head>
 <body class="flex flex-col items-center justify-between h-screen p-4 select-none">
 
-    <!-- ÜST BİLGİ VE TEMA GÖSTERGESİ -->
+    <!-- ÜST BİLGİ -->
     <header class="w-full max-w-md flex justify-between items-center bg-slate-900/80 backdrop-blur border border-slate-800 p-3 rounded-2xl shadow-xl">
         <div>
             <div class="text-[10px] text-slate-400 font-mono">SKOR</div>
             <div id="score" class="text-2xl font-extrabold text-cyan-400 font-mono">0</div>
         </div>
         <div class="text-center">
-            <div class="text-[10px] text-slate-400 font-mono">MOD / TEMA</div>
-            <div id="theme-name" class="text-xs font-bold text-amber-400">1. SEVİYE: NEON GECE</div>
+            <div class="text-[10px] text-slate-400 font-mono">TEMA EVRİMİ</div>
+            <div id="theme-name" class="text-xs font-bold text-amber-400">NEON GECE</div>
         </div>
         <div>
             <div class="text-[10px] text-slate-400 font-mono">EN YÜKSEK</div>
@@ -30,53 +31,52 @@
         </div>
     </header>
 
-    <!-- 8x8 OYUN TAHTASI -->
-    <main class="flex flex-col items-center justify-center my-auto">
+    <!-- OYUN TAHTASI -->
+    <main class="flex flex-col items-center justify-center my-auto relative">
         <div id="board" class="grid grid-cols-8 gap-1.5 bg-slate-900/90 p-3 rounded-2xl border-2 border-slate-800 shadow-2xl"></div>
     </main>
 
-    <!-- ALT BLOK SEÇENEKLERİ -->
-    <footer class="w-full max-w-md bg-slate-900/80 backdrop-blur border border-slate-800 p-4 rounded-2xl shadow-xl flex justify-around items-center min-h-[110px]" id="shapes-container">
-        <!-- Bloklar buraya dinamik gelecek -->
+    <!-- ALT BLOK SEÇENEKLERİ (SÜRÜKLENEBİLİR) -->
+    <footer class="w-full max-w-md bg-slate-900/80 backdrop-blur border border-slate-800 p-4 rounded-2xl shadow-xl flex justify-around items-center min-h-[120px]" id="shapes-container">
+        <!-- Bloklar buraya gelecek -->
     </footer>
 
-    <!-- OYUN BİTTİ EKRANI -->
-    <div id="game-over-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden flex-col items-center justify-center p-6 z-50 text-center">
+    <!-- OYUN BİTTİ MODALI -->
+    <div id="game-over-modal" class="fixed inset-0 bg-black/85 backdrop-blur-sm hidden flex-col items-center justify-center p-6 z-50 text-center">
         <div class="bg-slate-900 border border-slate-800 p-6 rounded-3xl max-w-xs w-full shadow-2xl space-y-4">
             <div class="w-16 h-16 bg-red-500/20 text-red-500 rounded-2xl flex items-center justify-center mx-auto text-3xl">
-                <i class="fa-solid fa-triangle-exclamation"></i>
+                <i class="fa-solid fa-bolt"></i>
             </div>
-            <h2 class="text-xl font-bold text-white">HAMLE KALMADI!</h2>
-            <p class="text-xs text-slate-400">Tahta doldu ve yeni blok sığmıyor.</p>
+            <h2 class="text-xl font-bold text-white">OYUN BİTTİ</h2>
+            <p class="text-xs text-slate-400">Tahtada yer kalmadı kaptan!</p>
             <button onclick="resetGame()" class="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl shadow-lg transition">TEKRAR DENE</button>
         </div>
     </div>
 
-    <!-- OYUN MANTIĞI VE EVRİM SİSTEMİ -->
+    <!-- OYUN MANTIĞI VE SÜRÜKLE-BIRAK SİSTEMİ -->
     <script>
         const GRID_SIZE = 8;
         let board = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(0));
         let score = 0;
         let highscore = 0;
-        let currentShapes = [];
+        let currentShapes = [null, null, null];
 
-        // Skorlara Göre Evrilen Renk Paletleri ve Temalar
         const themes = [
-            { threshold: 0, name: "1. SEVİYE: NEON GECE", colors: ['#38bdf8', '#818cf8', '#c084fc'] },
-            { threshold: 300, name: "2. SEVİYE: SİBERPUNK", colors: ['#f43f5e', '#fb923c', '#facc15'] },
-            { threshold: 800, name: "3. SEVİYE: DİGİTAL ORMAN", colors: ['#34d399', '#22d3ee', '#10b981'] },
-            { threshold: 1500, name: "4. SEVİYE: ALTIN ÇAĞ", colors: ['#fbbf24', '#f59e0b', '#d97706'] }
+            { threshold: 0, name: "NEON GECE", colors: ['#38bdf8', '#818cf8', '#c084fc'] },
+            { threshold: 400, name: "SİBERPUNK", colors: ['#f43f5e', '#fb923c', '#facc15'] },
+            { threshold: 1000, name: "DİGİTAL ORMAN", colors: ['#34d399', '#22d3ee', '#10b981'] },
+            { threshold: 2000, name: "ALTIN ÇAĞ", colors: ['#fbbf24', '#f59e0b', '#d97706'] }
         ];
 
         const SHAPES = [
-            [[1]], // Tekli
-            [[1, 1]], // 2 yatay
-            [[1], [1]], // 2 dikey
-            [[1, 1, 1]], // 3 yatay
-            [[1], [1], [1]], // 3 dikey
-            [[1, 1], [1, 1]], // 2x2 Kare
-            [[1, 1, 1], [0, 1, 0]], // T şekli
-            [[1, 0], [1, 1]] // L şekli
+            [[1]], 
+            [[1, 1]], 
+            [[1], [1]], 
+            [[1, 1, 1]], 
+            [[1], [1], [1]], 
+            [[1, 1], [1, 1]], 
+            [[1, 1, 1], [0, 1, 0]], 
+            [[1, 0], [1, 1]]
         ];
 
         function getCurrentTheme() {
@@ -99,7 +99,10 @@
                     if (board[r][c] !== 0) {
                         cell.style.background = board[r][c];
                         cell.style.borderColor = board[r][c];
-                        cell.style.boxShadow = `0 0 10px ${board[r][c]}`;
+                        cell.style.boxShadow = `0 0 12px ${board[r][c]}`;
+                    } else {
+                        cell.style.background = 'rgba(255,255,255,0.03)';
+                        cell.style.boxShadow = 'none';
                     }
                     boardEl.appendChild(cell);
                 }
@@ -112,13 +115,12 @@
         }
 
         function generateShapes() {
-            currentShapes = [];
             for (let i = 0; i < 3; i++) {
                 const randomShape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-                currentShapes.push({
+                currentShapes[i] = {
                     matrix: randomShape,
                     color: getRandomColor()
-                });
+                };
             }
             renderShapes();
             checkGameOver();
@@ -128,68 +130,118 @@
             const container = document.getElementById('shapes-container');
             container.innerHTML = '';
             currentShapes.forEach((shape, index) => {
-                if (!shape) return;
                 const wrapper = document.createElement('div');
-                wrapper.className = 'flex flex-col items-center justify-center p-2 cursor-pointer bg-slate-950/60 border border-slate-800 rounded-xl hover:border-cyan-500 transition';
-                wrapper.onclick = () => selectShape(index);
+                wrapper.className = 'draggable-shape flex flex-col items-center justify-center p-3 bg-slate-950/80 border border-slate-800 rounded-2xl min-w-[70px] min-h-[70px] shadow-inner';
+                
+                if (shape) {
+                    const table = document.createElement('div');
+                    table.className = 'grid gap-1 pointer-events-none';
+                    table.style.gridTemplateColumns = `repeat(${shape.matrix[0].length}, 20px)`;
 
-                const table = document.createElement('div');
-                table.className = 'grid gap-1';
-                table.style.gridTemplateColumns = `repeat(${shape.matrix[0].length}, 24px)`;
-
-                shape.matrix.forEach(row => {
-                    row.forEach(val => {
-                        const cell = document.createElement('div');
-                        cell.className = 'shape-cell';
-                        if (val === 1) {
-                            cell.style.background = shape.color;
-                            cell.style.boxShadow = `0 0 8px ${shape.color}`;
-                        }
-                        table.appendChild(cell);
+                    shape.matrix.forEach(row => {
+                        row.forEach(val => {
+                            const cell = document.createElement('div');
+                            cell.style.width = '20px';
+                            cell.style.height = '20px';
+                            cell.style.borderRadius = '4px';
+                            if (val === 1) {
+                                cell.style.background = shape.color;
+                                cell.style.boxShadow = `0 0 8px ${shape.color}`;
+                            }
+                            table.appendChild(cell);
+                        });
                     });
-                });
-                wrapper.appendChild(table);
+                    wrapper.appendChild(table);
+
+                    // Dokunmatik Sürükleme Olayları
+                    setupDragAndDrop(wrapper, index);
+                }
                 container.appendChild(wrapper);
             });
         }
 
-        let selectedShapeIndex = null;
-        function selectShape(index) {
-            selectedShapeIndex = index;
-            // Görsel olarak seçildiğini belirt
-            const containers = document.getElementById('shapes-container').children;
-            for(let i=0; i<containers.length; i++) {
-                containers[i].style.borderColor = i === index ? '#06b6d4' : '#1e293b';
+        function setupDragAndDrop(el, index) {
+            let startX = 0, startY = 0, currentX = 0, currentY = 0;
+            let clone = null;
+
+            el.addEventListener('touchstart', dragStart, {passive: false});
+            el.addEventListener('mousedown', dragStart);
+
+            function dragStart(e) {
+                if (!currentShapes[index]) return;
+                e.preventDefault();
+                const touch = e.touches ? e.touches[0] : e;
+                startX = touch.clientX;
+                startY = touch.clientY;
+
+                clone = el.cloneNode(true);
+                clone.style.position = 'fixed';
+                clone.style.zIndex = '1000';
+                clone.style.pointerEvents = 'none';
+                clone.style.opacity = '0.9';
+                document.body.appendChild(clone);
+                updateClonePos(startX, startY);
+
+                window.addEventListener('touchmove', dragMove, {passive: false});
+                window.addEventListener('mousemove', dragMove);
+                window.addEventListener('touchend', dragEnd);
+                window.addEventListener('mouseup', dragEnd);
             }
-        }
 
-        // Tahtaya tıklama ile yerleştirme (Mobil/Tablet dostu)
-        document.getElementById('board').addEventListener('click', e => {
-            const cell = e.target.closest('.grid-cell');
-            if (!cell || selectedShapeIndex === null) return;
+            function dragMove(e) {
+                e.preventDefault();
+                const touch = e.touches ? e.touches[0] : e;
+                currentX = touch.clientX;
+                currentY = touch.clientY;
+                updateClonePos(currentX, currentY);
+            }
 
-            const r = parseInt(cell.dataset.row);
-            const c = parseInt(cell.dataset.col);
-            const shape = currentShapes[selectedShapeIndex];
-
-            if (canPlace(shape.matrix, r, c)) {
-                placeShape(shape.matrix, r, c, shape.color);
-                currentShapes[selectedShapeIndex] = null;
-                selectedShapeIndex = null;
-                score += 10;
-                checkLines();
-                initBoard();
-                renderShapes();
-
-                // Tema güncelleme kontrolü
-                const theme = getCurrentTheme();
-                document.getElementById('theme-name').innerText = theme.name;
-
-                if (currentShapes.every(s => s === null)) {
-                    generateShapes();
+            function updateClonePos(x, y) {
+                if (clone) {
+                    clone.style.left = (x - 40) + 'px';
+                    clone.style.top = (y - 60) + 'px';
                 }
             }
-        });
+
+            function dragEnd(e) {
+                window.removeEventListener('touchmove', dragMove);
+                window.removeEventListener('mousemove', dragMove);
+                window.removeEventListener('touchend', dragEnd);
+                window.removeEventListener('mouseup', dragEnd);
+
+                if (clone) {
+                    clone.remove();
+                    clone = null;
+                }
+
+                // Bırakılan konumu kontrol et (Tahta üzerinde mi?)
+                const touch = e.changedTouches ? e.changedTouches[0] : e;
+                const target = document.elementFromPoint(touch.clientX, touch.clientY);
+                const cell = target ? target.closest('.grid-cell') : null;
+
+                if (cell) {
+                    const r = parseInt(cell.dataset.row);
+                    const c = parseInt(cell.dataset.col);
+                    const shape = currentShapes[index];
+
+                    if (canPlace(shape.matrix, r, c)) {
+                        placeShape(shape.matrix, r, c, shape.color);
+                        currentShapes[index] = null;
+                        score += 15;
+                        checkLines();
+                        initBoard();
+                        renderShapes();
+
+                        const theme = getCurrentTheme();
+                        document.getElementById('theme-name').innerText = theme.name;
+
+                        if (currentShapes.every(s => s === null)) {
+                            generateShapes();
+                        }
+                    }
+                }
+            }
+        }
 
         function canPlace(matrix, startR, startC) {
             for (let r = 0; r < matrix.length; r++) {
@@ -218,14 +270,12 @@
 
         function checkLines() {
             let linesCleared = 0;
-            // Satır kontrolü
             for (let r = 0; r < GRID_SIZE; r++) {
                 if (board[r].every(cell => cell !== 0)) {
                     board[r] = Array(GRID_SIZE).fill(0);
                     linesCleared++;
                 }
             }
-            // Sütun kontrolü
             for (let c = 0; c < GRID_SIZE; c++) {
                 let full = true;
                 for (let r = 0; r < GRID_SIZE; r++) {
@@ -240,7 +290,7 @@
             }
 
             if (linesCleared > 0) {
-                score += linesCleared * 100 * linesCleared; // Kombo Çarpanı
+                score += linesCleared * 120 * linesCleared;
                 document.getElementById('score').innerText = score;
                 if (score > highscore) {
                     highscore = score;
@@ -250,7 +300,6 @@
         }
 
         function checkGameOver() {
-            // Eğer kalan hiçbir şekil tahtaya sığmıyorsa oyun biter
             let possible = false;
             currentShapes.forEach(shape => {
                 if (!shape) return;
@@ -268,7 +317,7 @@
         }
 
         function resetGame() {
-            board = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(0));
+            board = Array(GRID_SIZE).fill(0).io ? Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(0)) : Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(0));
             score = 0;
             document.getElementById('score').innerText = score;
             document.getElementById('game-over-modal').classList.remove('flex');
@@ -277,7 +326,6 @@
             generateShapes();
         }
 
-        // Oyunu Başlat
         initBoard();
         generateShapes();
     </script>
